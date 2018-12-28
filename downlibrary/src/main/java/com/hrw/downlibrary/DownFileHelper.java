@@ -1,5 +1,11 @@
 package com.hrw.downlibrary;
 
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.Intent;
+
+import com.hrw.downlibrary.service.DownService;
+
 import java.util.List;
 
 /**
@@ -10,16 +16,18 @@ import java.util.List;
  */
 public class DownFileHelper {
     private static DownFileHelper mFileHelper;
+    private Context mContext;
 
-    private DownFileHelper() {
+    private DownFileHelper(Context context) {
+        mContext = context;
     }
 
 
-    public DownFileHelper instance() {
+    public DownFileHelper instance(Context context) {
         if (mFileHelper == null) {
             synchronized (DownFileHelper.class) {
                 if (mFileHelper == null) {
-                    mFileHelper = new DownFileHelper();
+                    mFileHelper = new DownFileHelper(context);
                 }
             }
         }
@@ -27,10 +35,18 @@ public class DownFileHelper {
     }
 
     public DownFileHelper start(String url) {
+        if (!isServiceRuning("com.hrw.downlibrary.service.DownService")) {
+            Intent intent = new Intent(mContext, DownService.class);
+            mContext.startService(intent);
+        }
         return mFileHelper;
     }
 
     public DownFileHelper start(List<String> urls) {
+        if (!isServiceRuning("com.hrw.downlibrary.service.DownService")) {
+            Intent intent = new Intent(mContext, DownService.class);
+            mContext.startService(intent);
+        }
         return mFileHelper;
     }
 
@@ -46,4 +62,15 @@ public class DownFileHelper {
         return mFileHelper;
     }
 
+    private boolean isServiceRuning(String serviceName) {
+        boolean isRunning = false;
+        ActivityManager manager = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningServiceInfo> serviceInfos = manager.getRunningServices(45);
+        for (ActivityManager.RunningServiceInfo serviceInfo : serviceInfos) {
+            if (serviceInfo.service.getClassName().equals(serviceName)) {
+                isRunning = true;
+            }
+        }
+        return isRunning;
+    }
 }

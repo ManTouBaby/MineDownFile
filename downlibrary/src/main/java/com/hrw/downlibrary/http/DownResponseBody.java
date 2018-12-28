@@ -45,7 +45,7 @@ public class DownResponseBody extends ResponseBody {
         return new Source() {
             @Override
             public long read(Buffer sink, long byteCount) throws IOException {
-                System.out.println("下载数据:" + source.toString());
+//                System.out.println("下载数据:" + source.toString());
                 return source.read(sink, byteCount);
             }
 

@@ -11,6 +11,19 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:onClick="downClick"
-        android:text="下载测试" />
+        android:text="下载APP测试" />
 
+    <Button
+        android:id="@+id/btn02"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="downClick"
+        android:text="停止下载APP测试" />
+
+    <Button
+        android:id="@+id/btn03"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="downClick"
+        android:text="恢复下载APP测试" />
 </LinearLayout>

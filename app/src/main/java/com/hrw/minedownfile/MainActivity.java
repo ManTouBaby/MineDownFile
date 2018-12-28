@@ -19,7 +19,13 @@ public class MainActivity extends AppCompatActivity {
     public void downClick(View view) {
         switch (view.getId()) {
             case R.id.btn01:
-                RetrofitHelper.instance(this).down(url2, DownEnumType.APP);
+                RetrofitHelper.instance(this).down(DownEnumType.APP, url2);
+                break;
+            case R.id.btn02:
+                RetrofitHelper.instance(this).stop(url2);
+                break;
+            case R.id.btn03:
+                RetrofitHelper.instance(this).resume(url2);
                 break;
         }
     }
