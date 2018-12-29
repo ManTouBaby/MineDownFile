@@ -7,6 +7,7 @@ import com.hrw.downlibrary.dao.FileDownDao;
 import com.hrw.downlibrary.db.DownDataBase;
 import com.hrw.downlibrary.entity.DownBean;
 import com.hrw.downlibrary.entity.DownEnumType;
+import com.hrw.downlibrary.listener.DownCallBack;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -24,9 +26,7 @@ import io.reactivex.Observer;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
-import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
-import okhttp3.Response;
 import okhttp3.ResponseBody;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
@@ -68,9 +68,9 @@ public class RetrofitHelper {
      * @param url          下载地址
      * @param downEnumType 保存类型
      */
-    public void down(DownEnumType downEnumType, final String url) {
+    public void start(DownEnumType downEnumType, final String url, DownCallBack downCallBack) {
         String savePath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + mContext.getPackageName() + downEnumType.getTypePath();
-        down(downEnumType, url, savePath);
+        start(downEnumType, url, savePath, downCallBack);
     }
 
     /**
@@ -80,9 +80,9 @@ public class RetrofitHelper {
      * @param savePath     保存地址
      * @param downEnumType 保存类型
      */
-    public void down(DownEnumType downEnumType, final String url, String savePath) {
+    public void start(DownEnumType downEnumType, final String url, String savePath, DownCallBack downCallBack) {
         String saveName = url.substring(url.lastIndexOf("/") + 1);
-        down(downEnumType, url, savePath, saveName);
+        start(downEnumType, url, savePath, saveName, downCallBack);
     }
 
 
@@ -103,10 +103,10 @@ public class RetrofitHelper {
      *
      * @param url
      */
-    public void resume(String url) {
+    public void resume(String url, final DownCallBack downCallBack) {
         DownBean downBean = downBeanMap.get(url);
         if (downBean != null) {
-            down(DownEnumType.getDownEnumType(downBean.getFileType()), downBean.getDownUrl(), downBean.getSavePath(), downBean.getSaveName());
+            start(DownEnumType.getDownEnumType(downBean.getFileType()), downBean.getDownUrl(), downBean.getSavePath(), downBean.getSaveName(), downCallBack);
         }
     }
 
@@ -118,12 +118,10 @@ public class RetrofitHelper {
      * @param saveName     保存名称
      * @param downEnumType 保存类型
      */
-    public void down(final DownEnumType downEnumType, final String url, final String savePath, final String saveName) {
-//        System.out.println("down:" + Thread.currentThread().getName());
+    public void start(final DownEnumType downEnumType, final String url, final String savePath, final String saveName, final DownCallBack downCallBack) {
         Observable.create(new ObservableOnSubscribe<DownBean>() {
             @Override
             public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
-//                System.out.println("create:" + Thread.currentThread().getName());
                 DownBean downBean = fileDownDao.getDownBean(url);
                 if (downBean == null) {
                     downBean = new DownBean();
@@ -141,14 +139,12 @@ public class RetrofitHelper {
         }).flatMap(new Function<DownBean, Observable<ResponseBody>>() {
             @Override
             public Observable<ResponseBody> apply(DownBean downBean) throws Exception {
-//                System.out.println("flatMap:" + Thread.currentThread().getName());
                 String rangeStr;
                 if (downBean.getCurrentFileSize() == 0) {
                     rangeStr = "bytes=" + downBean.getCurrentFileSize() + "-";
                 } else {
                     rangeStr = "bytes=" + downBean.getCurrentFileSize() + "-" + downBean.getFileSize();
                 }
-//                getService(DownApi.class).down(rangeStr, url);
                 return getService(DownApi.class).down(rangeStr, url);
             }
         }).map(new Function<ResponseBody, ResponseBody>() {
@@ -191,6 +187,7 @@ public class RetrofitHelper {
                             System.out.println("当前进度:" + progress);
                             bean.setCurrentFileSize(currentSize);
                             fileDownDao.updateDownBean(bean);
+                            downCallBack.onDown(url, bean);
                         }
                         lastProgress = progress;
                     }
@@ -225,6 +222,52 @@ public class RetrofitHelper {
 
             @Override
             public void onError(Throwable e) {
+                downCallBack.onError(url, e.toString());
+                disposable.dispose();
+
+            }
+
+            @Override
+            public void onComplete() {
+                downCallBack.onComplete(url);
+                System.out.println("下载完成-----------------------");
+                disposable.dispose();
+            }
+        });
+
+
+    }
+
+    public void delete(final String url) {
+        Observable.create(new ObservableOnSubscribe<DownBean>() {
+            @Override
+            public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
+                DownBean downBean = fileDownDao.getDownBean(url);
+                if (downBean != null) {
+                    emitter.onNext(downBean);
+                }
+            }
+        }).map(new Function<DownBean, Boolean>() {
+            @Override
+            public Boolean apply(DownBean downBean) throws Exception {
+                File file = new File(downBean.getSavePath() + downBean.getSaveName());
+                return file.delete();
+            }
+        }).subscribe(new Observer<Boolean>() {
+            Disposable disposable;
+
+            @Override
+            public void onSubscribe(Disposable d) {
+                disposable = d;
+            }
+
+            @Override
+            public void onNext(Boolean aBoolean) {
+
+            }
+
+            @Override
+            public void onError(Throwable e) {
                 disposable.dispose();
             }
 
@@ -233,8 +276,44 @@ public class RetrofitHelper {
                 disposable.dispose();
             }
         });
+    }
 
+    public void deleteAll() {
+        Observable.create(new ObservableOnSubscribe<List<DownBean>>() {
+            @Override
+            public void subscribe(ObservableEmitter<List<DownBean>> emitter) throws Exception {
+                List<DownBean> downBeans = fileDownDao.getAllDownBean();
+                if (downBeans != null) {
+                    emitter.onNext(downBeans);
+                }
+                emitter.onComplete();
+            }
+        }).subscribe(new Observer<List<DownBean>>() {
+            Disposable disposable;
 
+            @Override
+            public void onSubscribe(Disposable d) {
+                disposable = d;
+            }
+
+            @Override
+            public void onNext(List<DownBean> downBeans) {
+                for (DownBean bean : downBeans) {
+                    File file = new File(bean.getSavePath() + bean.getSaveName());
+                    file.delete();
+                }
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                disposable.dispose();
+            }
+
+            @Override
+            public void onComplete() {
+                disposable.dispose();
+            }
+        });
     }
 
     private <T> T getService(Class<T> aClass) {
@@ -253,18 +332,8 @@ public class RetrofitHelper {
     private OkHttpClient getOkHttpClient() {
         return new OkHttpClient.Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
-//                .addInterceptor(interceptor)
-//                .readTimeout(8, TimeUnit.SECONDS)
-//                .readTimeout(8, TimeUnit.SECONDS)
                 .build();
     }
 
-    Interceptor interceptor = new Interceptor() {
-        @Override
-        public Response intercept(Chain chain) throws IOException {
-            Response response = chain.proceed(chain.request());
-            return response.newBuilder().body(new DownResponseBody(response.body())).build();
-        }
-    };
 
 }
