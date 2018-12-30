@@ -9,6 +9,7 @@ package com.hrw.downlibrary.service;
 public enum ServiceActionType {
     START,
     STOP,
+    STOP_ALL,
     RESUME,
     DELETE,
     DELETE_ALL

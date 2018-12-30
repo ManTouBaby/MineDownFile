@@ -28,7 +28,7 @@ public class DownFileHelper {
     }
 
 
-    public DownFileHelper instance(Context context) {
+    public static DownFileHelper instance(Context context) {
         if (mFileHelper == null) {
             synchronized (DownFileHelper.class) {
                 if (mFileHelper == null) {
@@ -47,17 +47,6 @@ public class DownFileHelper {
     public void setMaxDownCount(int maxDownCount) {
         this.maxDownCount = maxDownCount;
     }
-
-    public DownFileHelper start(String url) {
-
-        return mFileHelper;
-    }
-
-    public DownFileHelper start(List<String> urls) {
-
-        return mFileHelper;
-    }
-
     /**
      * 开始下载任务
      *
@@ -93,24 +82,27 @@ public class DownFileHelper {
      * @return
      */
     public DownFileHelper start(DownEnumType downEnumType, String url, String savePath, String saveName) {
-
+        startService(ServiceActionType.START, downEnumType, url, savePath, saveName);
         return mFileHelper;
     }
 
     public DownFileHelper stop(String url) {
+        startService(ServiceActionType.STOP, url);
         return mFileHelper;
     }
 
     public DownFileHelper stopAll() {
+        startService(ServiceActionType.STOP_ALL);
         return mFileHelper;
     }
 
     public DownFileHelper resume(String url) {
+        startService(ServiceActionType.RESUME, url);
         return mFileHelper;
     }
 
     public DownFileHelper delete(String url) {
-
+        startService(ServiceActionType.DELETE, url);
         return mFileHelper;
     }
 
@@ -120,7 +112,7 @@ public class DownFileHelper {
      * @return
      */
     public DownFileHelper deleteAll() {
-
+        startService(ServiceActionType.DELETE_ALL);
         return mFileHelper;
     }
 
@@ -143,6 +135,21 @@ public class DownFileHelper {
         if (downEnumType != null) intent.putExtra(DownService.DOWN_ENUM_TYPE, downEnumType);
         if (savePath != null) intent.putExtra(DownService.SAVE_PATH, savePath);
         if (saveName != null) intent.putExtra(DownService.SAVE_FILE_NAME, saveName);
+        mContext.startService(intent);
+    }
+
+    private void startService(ServiceActionType actionType, @NonNull String url) {
+        Intent intent = new Intent(mContext, DownService.class);
+        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
+        intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
+        intent.putExtra(DownService.DOWN_URL, url);
+        mContext.startService(intent);
+    }
+
+    private void startService(ServiceActionType actionType) {
+        Intent intent = new Intent(mContext, DownService.class);
+        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
+        intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
         mContext.startService(intent);
     }
 
