@@ -4,7 +4,6 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Environment;
-import android.support.annotation.NonNull;
 
 import com.hrw.downlibrary.entity.DownEnumType;
 import com.hrw.downlibrary.service.DownService;
@@ -21,7 +20,7 @@ import java.util.List;
 public class DownFileHelper {
     private static DownFileHelper mFileHelper;
     private Context mContext;
-    private int maxDownCount = 3;
+    private int maxDownCount = 6;
 
     private DownFileHelper(Context context) {
         mContext = context;
@@ -47,6 +46,7 @@ public class DownFileHelper {
     public void setMaxDownCount(int maxDownCount) {
         this.maxDownCount = maxDownCount;
     }
+
     /**
      * 开始下载任务
      *
@@ -126,31 +126,24 @@ public class DownFileHelper {
         return mFileHelper;
     }
 
-    private void startService(ServiceActionType actionType, DownEnumType downEnumType, @NonNull String url, String savePath, String saveName) {
+    private void startService(ServiceActionType actionType, DownEnumType downType, String url, String savePath, String saveName) {
         Intent intent = new Intent(mContext, DownService.class);
-        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
+        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType.getIndex());
         intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
-        intent.putExtra(DownService.DOWN_URL, url);
 
-        if (downEnumType != null) intent.putExtra(DownService.DOWN_ENUM_TYPE, downEnumType);
+        if (url != null) intent.putExtra(DownService.DOWN_URL, url);
+        if (downType != null) intent.putExtra(DownService.DOWN_ENUM_TYPE, downType.getTypeValue());
         if (savePath != null) intent.putExtra(DownService.SAVE_PATH, savePath);
         if (saveName != null) intent.putExtra(DownService.SAVE_FILE_NAME, saveName);
         mContext.startService(intent);
     }
 
-    private void startService(ServiceActionType actionType, @NonNull String url) {
-        Intent intent = new Intent(mContext, DownService.class);
-        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
-        intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
-        intent.putExtra(DownService.DOWN_URL, url);
-        mContext.startService(intent);
+    private void startService(ServiceActionType actionType, String url) {
+        startService(actionType, null, url, null, null);
     }
 
     private void startService(ServiceActionType actionType) {
-        Intent intent = new Intent(mContext, DownService.class);
-        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
-        intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
-        mContext.startService(intent);
+        startService(actionType, null, null, null, null);
     }
 
     private boolean isServiceRuning(String serviceName) {

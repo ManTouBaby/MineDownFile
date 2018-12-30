@@ -24,7 +24,7 @@ import java.util.Map;
 public class DownService extends Service implements DownCallBack {
     public static final String SERVICE_ACTION_TYPE = "service_action_type";//操作类型
 
-    public static final String DOWN_URL = "service_action_type";//下载地址
+    public static final String DOWN_URL = "down_url";//下载地址
     public static final String DOWN_ENUM_TYPE = "down_enum_type";//下载文件类型
     public static final String SAVE_PATH = "save_path";//保存本地地址
     public static final String SAVE_FILE_NAME = "save_file_name";//保存本地文件名称
@@ -37,17 +37,17 @@ public class DownService extends Service implements DownCallBack {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        ServiceActionType actionType = (ServiceActionType) intent.getSerializableExtra(SERVICE_ACTION_TYPE);
-        String url = intent.getStringExtra(DOWN_URL);
         maxDownCount = intent.getIntExtra(MAX_DOWN_COUNT, 3);
-        switch (actionType) {
+        int actionType = intent.getIntExtra(SERVICE_ACTION_TYPE, -1);
+        String url = intent.getStringExtra(DOWN_URL);
+        switch (ServiceActionType.getActionType(actionType)) {
             case START:
-                DownEnumType downEnumType = (DownEnumType) intent.getSerializableExtra(DOWN_ENUM_TYPE);
+                int downEnumType = intent.getIntExtra(DOWN_ENUM_TYPE, 0);
                 String saveName = intent.getStringExtra(SAVE_FILE_NAME);
                 String savePath = intent.getStringExtra(SAVE_PATH);
 
                 DownBean bean = new DownBean();
-                bean.setFileType(downEnumType.getTypeValue());
+                bean.setFileType(downEnumType);
                 bean.setDownUrl(url);
                 bean.setSavePath(savePath);
                 bean.setSaveName(saveName);

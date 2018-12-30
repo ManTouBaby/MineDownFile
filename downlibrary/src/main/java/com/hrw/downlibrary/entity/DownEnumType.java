@@ -25,6 +25,7 @@ public enum DownEnumType {
         this.typePath = typePath;
     }
 
+
     public String getTypeName() {
         return typeName;
     }

@@ -8,6 +8,7 @@ import com.hrw.downlibrary.db.DownDataBase;
 import com.hrw.downlibrary.entity.DownBean;
 import com.hrw.downlibrary.entity.DownEnumType;
 import com.hrw.downlibrary.listener.DownCallBack;
+import com.hrw.utilslibrary.log.MtLog;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -133,10 +134,14 @@ public class RetrofitHelper {
                     downBean.setFileType(downEnumType.getTypeValue());
                     fileDownDao.insertDownBean(downBean);
                 }
-                downBeanMap.put(url, downBean);
-                emitter.onNext(downBean);
+                if (downBean.getCurrentFileSize() == downBean.getFileSize()) {
+                    emitter.onComplete();
+                } else {
+                    downBeanMap.put(url, downBean);
+                    emitter.onNext(downBean);
+                }
             }
-        }).flatMap(new Function<DownBean, Observable<ResponseBody>>() {
+        }).subscribeOn(Schedulers.io()).observeOn(Schedulers.io()).flatMap(new Function<DownBean, Observable<ResponseBody>>() {
             @Override
             public Observable<ResponseBody> apply(DownBean downBean) throws Exception {
                 String rangeStr;
@@ -206,7 +211,7 @@ public class RetrofitHelper {
                 }
                 return responseBody;
             }
-        }).subscribeOn(Schedulers.io()).observeOn(Schedulers.io()).subscribe(new Observer<ResponseBody>() {
+        }).subscribe(new Observer<ResponseBody>() {
             Disposable disposable;
 
             @Override
@@ -222,6 +227,8 @@ public class RetrofitHelper {
 
             @Override
             public void onError(Throwable e) {
+                MtLog.init(true);
+                MtLog.d("Down Fail--" + e.toString());
                 downCallBack.onError(url, e.toString());
                 disposable.dispose();
 
@@ -229,8 +236,9 @@ public class RetrofitHelper {
 
             @Override
             public void onComplete() {
+                MtLog.init(true);
+                MtLog.d("Down Complete--" + url);
                 downCallBack.onComplete(url);
-                System.out.println("下载完成-----------------------");
                 disposable.dispose();
             }
         });
