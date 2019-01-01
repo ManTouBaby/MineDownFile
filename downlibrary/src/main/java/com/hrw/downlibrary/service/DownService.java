@@ -10,6 +10,8 @@ import com.hrw.downlibrary.entity.DownEnumType;
 import com.hrw.downlibrary.http.RetrofitHelper;
 import com.hrw.downlibrary.listener.DownCallBack;
 
+import org.greenrobot.eventbus.EventBus;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +38,18 @@ public class DownService extends Service implements DownCallBack {
     int maxDownCount = 3;
 
     @Override
+    public void onCreate() {
+        EventBus.getDefault().isRegistered(this);
+        super.onCreate();
+    }
+
+    @Override
+    public void onDestroy() {
+        EventBus.getDefault().unregister(this);
+        super.onDestroy();
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         maxDownCount = intent.getIntExtra(MAX_DOWN_COUNT, 3);
         int actionType = intent.getIntExtra(SERVICE_ACTION_TYPE, -1);
@@ -54,13 +68,13 @@ public class DownService extends Service implements DownCallBack {
                 start(bean);
                 break;
             case STOP:
-                RetrofitHelper.instance(this).stop(url);
+                stop(url);
                 break;
             case RESUME:
-                RetrofitHelper.instance(this).resume(url, this);
+                resume(url);
                 break;
             case DELETE:
-                RetrofitHelper.instance(this).delete(url);
+                delete(url);
                 break;
             case DELETE_ALL:
                 RetrofitHelper.instance(this).deleteAll();
@@ -71,12 +85,55 @@ public class DownService extends Service implements DownCallBack {
 
     private void start(DownBean bean) {
         if (doingDown.size() < maxDownCount) {
+            if (doingDown.containsKey(bean.getDownUrl())) return;
+
             RetrofitHelper.instance(this).start(DownEnumType.getDownEnumType(bean.getFileType()), bean.getDownUrl(), bean.getSavePath(), bean.getSaveName(), this);
             doingDown.put(bean.getDownUrl(), bean);
         } else {
             waitDown.add(bean);
         }
     }
+
+    private void delete(String url) {
+        RetrofitHelper.instance(this).delete(url);
+
+        DownBean bean = null;
+        for (DownBean downBean : waitDown) {
+            if (url.equals(downBean.getDownUrl())) {
+                bean = downBean;
+            }
+        }
+
+        if (bean!=null)waitDown.remove(bean);
+        if (doingDown.containsKey(url))doingDown.remove(url);
+
+    }
+
+    private void stop(String url) {
+        DownBean bean = null;
+        if (doingDown.containsKey(url)) {
+            bean = doingDown.get(url);
+            doingDown.remove(url);
+            waitDown.add(bean);
+        }
+        RetrofitHelper.instance(this).stop(url);
+    }
+
+    private void resume(String url) {
+        DownBean bean = null;
+        for (DownBean downBean : waitDown) {
+            if (url.equals(downBean.getDownUrl())) {
+                bean = downBean;
+            }
+        }
+        if (bean != null) {
+            waitDown.remove(bean);
+            doingDown.put(bean.getDownUrl(), bean);
+            RetrofitHelper.instance(this).resume(url, this);
+        }
+
+    }
+
 
     @Nullable
     @Override
@@ -97,7 +154,6 @@ public class DownService extends Service implements DownCallBack {
             DownBean bean = waitDown.get(0);
             waitDown.remove(0);
             doingDown.put(bean.getDownUrl(), bean);
-            start(bean);
         }
     }
 

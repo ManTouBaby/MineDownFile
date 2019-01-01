@@ -2,13 +2,14 @@ package com.hrw.downlibrary.http;
 
 import android.content.Context;
 import android.os.Environment;
+import android.util.Log;
 
 import com.hrw.downlibrary.dao.FileDownDao;
 import com.hrw.downlibrary.db.DownDataBase;
 import com.hrw.downlibrary.entity.DownBean;
 import com.hrw.downlibrary.entity.DownEnumType;
+import com.hrw.downlibrary.entity.DownStatus;
 import com.hrw.downlibrary.listener.DownCallBack;
-import com.hrw.utilslibrary.log.MtLog;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -25,6 +26,7 @@ import io.reactivex.ObservableEmitter;
 import io.reactivex.ObservableOnSubscribe;
 import io.reactivex.Observer;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import okhttp3.OkHttpClient;
@@ -40,6 +42,7 @@ import retrofit2.converter.gson.GsonConverterFactory;
  * @desc:
  */
 public class RetrofitHelper {
+    private final static String TAG = "RetrofitHelper";
     private static RetrofitHelper retrofitHelper;
     private static Map<String, Disposable> disposableMap = new HashMap<>();
     private static Map<String, DownBean> downBeanMap = new HashMap<>();
@@ -88,30 +91,6 @@ public class RetrofitHelper {
 
 
     /**
-     * 暂停请求
-     *
-     * @param url
-     */
-    public void stop(String url) {
-        Disposable disposable = disposableMap.get(url);
-        if (disposable != null) {
-            disposable.dispose();
-        }
-    }
-
-    /**
-     * 恢复下载
-     *
-     * @param url
-     */
-    public void resume(String url, final DownCallBack downCallBack) {
-        DownBean downBean = downBeanMap.get(url);
-        if (downBean != null) {
-            start(DownEnumType.getDownEnumType(downBean.getFileType()), downBean.getDownUrl(), downBean.getSavePath(), downBean.getSaveName(), downCallBack);
-        }
-    }
-
-    /**
      * 开始下载任务
      *
      * @param url          下载地址
@@ -133,13 +112,26 @@ public class RetrofitHelper {
                     downBean.setFileSize(0);
                     downBean.setFileType(downEnumType.getTypeValue());
                     fileDownDao.insertDownBean(downBean);
-                }
-                if (downBean.getCurrentFileSize() == downBean.getFileSize()) {
-                    emitter.onComplete();
                 } else {
-                    downBeanMap.put(url, downBean);
-                    emitter.onNext(downBean);
+                    File file = new File(downBean.getSavePath(), downBean.getSaveName());
+                    long currentSize = downBean.getCurrentFileSize();
+                    long fileAllSize = downBean.getFileSize();
+                    if (currentSize == fileAllSize && fileAllSize > 0 && file.exists()) {
+                        System.out.println("数据已下载完毕");
+                        emitter.onComplete();
+                    } else if (currentSize > fileAllSize || currentSize == fileAllSize && !file.exists()) {
+                        downBean.setFileSize(0);
+                        downBean.setCurrentFileSize(0);
+                        fileDownDao.updateDownBean(downBean);
+                        downBeanMap.put(url, downBean);
+                        emitter.onNext(downBean);
+                    } else {
+                        downBeanMap.put(url, downBean);
+                        emitter.onNext(downBean);
+                    }
                 }
+
+
             }
         }).subscribeOn(Schedulers.io()).observeOn(Schedulers.io()).flatMap(new Function<DownBean, Observable<ResponseBody>>() {
             @Override
@@ -185,13 +177,21 @@ public class RetrofitHelper {
                     int len;
                     int lastProgress = 0;
                     while ((len = inputStream.read(buf)) != -1) {
+                        int available = inputStream.available();
+//                        System.out.println("available:" + available);,
                         accessFile.write(buf, 0, len);
                         currentSize += len;
                         progress = (int) (currentSize * 100 / total);
                         if (lastProgress != progress) {
                             System.out.println("当前进度:" + progress);
                             bean.setCurrentFileSize(currentSize);
+                            if (progress == 100) {
+                                bean.setDownStatus(DownStatus.ON_COMPLETE);
+                            } else {
+                                bean.setDownStatus(DownStatus.ON_DOWN);
+                            }
                             fileDownDao.updateDownBean(bean);
+                            downBeanMap.put(url, bean);
                             downCallBack.onDown(url, bean);
                         }
                         lastProgress = progress;
@@ -222,22 +222,22 @@ public class RetrofitHelper {
 
             @Override
             public void onNext(ResponseBody responseBody) {
-
+                DownBean bean = downBeanMap.get(url);
+                if (bean.getDownStatus() == DownStatus.ON_COMPLETE) {
+                    onComplete();
+                }
             }
 
             @Override
             public void onError(Throwable e) {
-                MtLog.init(true);
-                MtLog.d("Down Fail--" + e.toString());
+                Log.d(TAG, "Down Fail--" + e.toString());
                 downCallBack.onError(url, e.toString());
                 disposable.dispose();
-
             }
 
             @Override
             public void onComplete() {
-                MtLog.init(true);
-                MtLog.d("Down Complete--" + url);
+                Log.d(TAG, "Down Complete--" + url);
                 downCallBack.onComplete(url);
                 disposable.dispose();
             }
@@ -246,42 +246,76 @@ public class RetrofitHelper {
 
     }
 
+    /**
+     * 暂停请求
+     *
+     * @param url
+     */
+    public void stop(final String url) {
+        Disposable disposable = disposableMap.get(url);
+        if (disposable != null) {
+            disposable.dispose();
+            disposableMap.remove(disposable);
+        }
+        Observable.create(new ObservableOnSubscribe<DownBean>() {
+            @Override
+            public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
+                DownBean bean = fileDownDao.getDownBean(url);
+                bean.setDownStatus(DownStatus.ON_STOP);
+                fileDownDao.updateDownBean(bean);
+                emitter.onComplete();
+            }
+        }).subscribe(new Consumer<DownBean>() {
+            @Override
+            public void accept(DownBean downBean) throws Exception {
+
+            }
+        });
+    }
+
+    /**
+     * 恢复下载
+     *
+     * @param url
+     */
+    public void resume(final String url, final DownCallBack downCallBack) {
+        DownBean downBean = downBeanMap.get(url);
+        if (downBean != null) {
+            start(DownEnumType.getDownEnumType(downBean.getFileType()), downBean.getDownUrl(), downBean.getSavePath(), downBean.getSaveName(), downCallBack);
+        }
+        Observable.create(new ObservableOnSubscribe<DownBean>() {
+            @Override
+            public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
+                DownBean downBean = fileDownDao.getDownBean(url);
+                downBean.setDownStatus(DownStatus.ON_DOWN);
+                fileDownDao.updateDownBean(downBean);
+                emitter.onComplete();
+            }
+        }).subscribe(new Consumer<DownBean>() {
+            @Override
+            public void accept(DownBean downBean) throws Exception {
+
+            }
+        });
+    }
+
     public void delete(final String url) {
+        if (disposableMap.containsKey(url)) disposableMap.remove(url);
         Observable.create(new ObservableOnSubscribe<DownBean>() {
             @Override
             public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
                 DownBean downBean = fileDownDao.getDownBean(url);
                 if (downBean != null) {
-                    emitter.onNext(downBean);
+                    File file = new File(downBean.getSavePath() + downBean.getSaveName());
+                    file.delete();
+                    fileDownDao.deleteDownBean(url);
                 }
+                emitter.onComplete();
             }
-        }).map(new Function<DownBean, Boolean>() {
+        }).subscribe(new Consumer<DownBean>() {
             @Override
-            public Boolean apply(DownBean downBean) throws Exception {
-                File file = new File(downBean.getSavePath() + downBean.getSaveName());
-                return file.delete();
-            }
-        }).subscribe(new Observer<Boolean>() {
-            Disposable disposable;
+            public void accept(DownBean downBean) throws Exception {
 
-            @Override
-            public void onSubscribe(Disposable d) {
-                disposable = d;
-            }
-
-            @Override
-            public void onNext(Boolean aBoolean) {
-
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                disposable.dispose();
-            }
-
-            @Override
-            public void onComplete() {
-                disposable.dispose();
             }
         });
     }
@@ -291,35 +325,17 @@ public class RetrofitHelper {
             @Override
             public void subscribe(ObservableEmitter<List<DownBean>> emitter) throws Exception {
                 List<DownBean> downBeans = fileDownDao.getAllDownBean();
-                if (downBeans != null) {
-                    emitter.onNext(downBeans);
-                }
-                emitter.onComplete();
-            }
-        }).subscribe(new Observer<List<DownBean>>() {
-            Disposable disposable;
-
-            @Override
-            public void onSubscribe(Disposable d) {
-                disposable = d;
-            }
-
-            @Override
-            public void onNext(List<DownBean> downBeans) {
                 for (DownBean bean : downBeans) {
                     File file = new File(bean.getSavePath() + bean.getSaveName());
                     file.delete();
                 }
+                fileDownDao.deleteAllDownBean();
+                emitter.onComplete();
             }
-
+        }).subscribe(new Consumer<List<DownBean>>() {
             @Override
-            public void onError(Throwable e) {
-                disposable.dispose();
-            }
+            public void accept(List<DownBean> downBeans) throws Exception {
 
-            @Override
-            public void onComplete() {
-                disposable.dispose();
             }
         });
     }
@@ -340,6 +356,7 @@ public class RetrofitHelper {
     private OkHttpClient getOkHttpClient() {
         return new OkHttpClient.Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(8, TimeUnit.SECONDS)
                 .build();
     }
 

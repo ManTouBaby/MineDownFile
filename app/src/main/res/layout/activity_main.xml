@@ -26,4 +26,10 @@
         android:layout_height="wrap_content"
         android:onClick="downClick"
         android:text="恢复下载APP测试" />
+    <Button
+        android:id="@+id/btn04"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="downClick"
+        android:text="删除APP测试" />
 </LinearLayout>

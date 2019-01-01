@@ -19,13 +19,16 @@ public class MainActivity extends AppCompatActivity {
     public void downClick(View view) {
         switch (view.getId()) {
             case R.id.btn01:
-                DownFileHelper.instance(this).start(DownEnumType.APP,url2);
+                DownFileHelper.instance(this).start(DownEnumType.APP, url2);
                 break;
             case R.id.btn02:
                 DownFileHelper.instance(this).stop(url2);
                 break;
             case R.id.btn03:
                 DownFileHelper.instance(this).resume(url2);
+                break;
+            case R.id.btn04:
+                DownFileHelper.instance(this).delete(url2);
                 break;
         }
     }

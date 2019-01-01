@@ -22,6 +22,15 @@ public class DownBean {
     String fileSizeStr;//文件大小--字符大小
     long currentFileSize;//当前文件大小--长整形
     String currentFileSizeStr;//当前文件大小--字符串
+    int downStatus;//目前下载状态
+
+    public int getDownStatus() {
+        return downStatus;
+    }
+
+    public void setDownStatus(@DownStatus int downStatus) {
+        this.downStatus = downStatus;
+    }
 
     public String getDownUrl() {
         return downUrl;
