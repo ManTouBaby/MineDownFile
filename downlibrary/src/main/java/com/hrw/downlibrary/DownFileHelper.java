@@ -126,9 +126,9 @@ public class DownFileHelper {
         return mFileHelper;
     }
 
-    private void startService(ServiceActionType actionType, DownEnumType downType, String url, String savePath, String saveName) {
+    private void startService(@ServiceActionType int actionType, DownEnumType downType, String url, String savePath, String saveName) {
         Intent intent = new Intent(mContext, DownService.class);
-        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType.getIndex());
+        intent.putExtra(DownService.SERVICE_ACTION_TYPE, actionType);
         intent.putExtra(DownService.MAX_DOWN_COUNT, maxDownCount);
 
         if (url != null) intent.putExtra(DownService.DOWN_URL, url);
@@ -138,11 +138,11 @@ public class DownFileHelper {
         mContext.startService(intent);
     }
 
-    private void startService(ServiceActionType actionType, String url) {
+    private void startService(@ServiceActionType int actionType, String url) {
         startService(actionType, null, url, null, null);
     }
 
-    private void startService(ServiceActionType actionType) {
+    private void startService(@ServiceActionType int actionType) {
         startService(actionType, null, null, null, null);
     }
 

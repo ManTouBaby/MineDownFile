@@ -54,8 +54,8 @@ public class DownService extends Service implements DownCallBack {
         maxDownCount = intent.getIntExtra(MAX_DOWN_COUNT, 3);
         int actionType = intent.getIntExtra(SERVICE_ACTION_TYPE, -1);
         String url = intent.getStringExtra(DOWN_URL);
-        switch (ServiceActionType.getActionType(actionType)) {
-            case START:
+        switch (actionType) {
+            case ServiceActionType.START:
                 int downEnumType = intent.getIntExtra(DOWN_ENUM_TYPE, 0);
                 String saveName = intent.getStringExtra(SAVE_FILE_NAME);
                 String savePath = intent.getStringExtra(SAVE_PATH);
@@ -67,16 +67,16 @@ public class DownService extends Service implements DownCallBack {
                 bean.setSaveName(saveName);
                 start(bean);
                 break;
-            case STOP:
+            case ServiceActionType.STOP:
                 stop(url);
                 break;
-            case RESUME:
+            case ServiceActionType.RESUME:
                 resume(url);
                 break;
-            case DELETE:
+            case ServiceActionType.DELETE:
                 delete(url);
                 break;
-            case DELETE_ALL:
+            case ServiceActionType.DELETE_ALL:
                 RetrofitHelper.instance(this).deleteAll();
                 break;
         }

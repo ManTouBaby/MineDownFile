@@ -99,6 +99,7 @@ public class RetrofitHelper {
      * @param downEnumType 保存类型
      */
     public void start(final DownEnumType downEnumType, final String url, final String savePath, final String saveName, final DownCallBack downCallBack) {
+        System.out.println("start线程：" + Thread.currentThread().getName());
         Observable.create(new ObservableOnSubscribe<DownBean>() {
             @Override
             public void subscribe(ObservableEmitter<DownBean> emitter) throws Exception {
@@ -110,8 +111,11 @@ public class RetrofitHelper {
                     downBean.setSaveName(saveName);
                     downBean.setCurrentFileSize(0);
                     downBean.setFileSize(0);
+                    downBean.setDownStatus(DownStatus.ON_DOWN);
                     downBean.setFileType(downEnumType.getTypeValue());
+                    downBeanMap.put(url, downBean);
                     fileDownDao.insertDownBean(downBean);
+                    emitter.onNext(downBean);
                 } else {
                     File file = new File(downBean.getSavePath(), downBean.getSaveName());
                     long currentSize = downBean.getCurrentFileSize();
@@ -122,10 +126,12 @@ public class RetrofitHelper {
                     } else if (currentSize > fileAllSize || currentSize == fileAllSize && !file.exists()) {
                         downBean.setFileSize(0);
                         downBean.setCurrentFileSize(0);
+                        downBean.setDownStatus(DownStatus.ON_DOWN);
                         fileDownDao.updateDownBean(downBean);
                         downBeanMap.put(url, downBean);
                         emitter.onNext(downBean);
                     } else {
+                        downBean.setDownStatus(DownStatus.ON_DOWN);
                         downBeanMap.put(url, downBean);
                         emitter.onNext(downBean);
                     }
@@ -136,6 +142,7 @@ public class RetrofitHelper {
         }).subscribeOn(Schedulers.io()).observeOn(Schedulers.io()).flatMap(new Function<DownBean, Observable<ResponseBody>>() {
             @Override
             public Observable<ResponseBody> apply(DownBean downBean) throws Exception {
+                System.out.println("flatMap线程：" + Thread.currentThread().getName());
                 String rangeStr;
                 if (downBean.getCurrentFileSize() == 0) {
                     rangeStr = "bytes=" + downBean.getCurrentFileSize() + "-";
@@ -147,6 +154,7 @@ public class RetrofitHelper {
         }).map(new Function<ResponseBody, ResponseBody>() {
             @Override
             public ResponseBody apply(ResponseBody responseBody) throws Exception {
+                System.out.println("map线程：" + Thread.currentThread().getName());
                 DownBean bean = fileDownDao.getDownBean(url);
                 RandomAccessFile accessFile = null;
                 InputStream inputStream = null;
@@ -174,11 +182,11 @@ public class RetrofitHelper {
                         total = bean.getFileSize();
                     }
                     byte[] buf = new byte[2048];
-                    int len;
+                    int len = 0;
                     int lastProgress = 0;
-                    while ((len = inputStream.read(buf)) != -1) {
-                        int available = inputStream.available();
-//                        System.out.println("available:" + available);,
+                    while (downBeanMap.get(url).getDownStatus() == DownStatus.ON_DOWN && len != -1) {
+                        System.out.println("当前状态:"+downBeanMap.get(url).getDownStatus());
+                        len = inputStream.read(buf);
                         accessFile.write(buf, 0, len);
                         currentSize += len;
                         progress = (int) (currentSize * 100 / total);
@@ -222,6 +230,7 @@ public class RetrofitHelper {
 
             @Override
             public void onNext(ResponseBody responseBody) {
+                System.out.println("onNext线程：" + Thread.currentThread().getName());
                 DownBean bean = downBeanMap.get(url);
                 if (bean.getDownStatus() == DownStatus.ON_COMPLETE) {
                     onComplete();
@@ -248,11 +257,13 @@ public class RetrofitHelper {
 
     /**
      * 暂停请求
+     * 030932
      *
      * @param url
      */
     public void stop(final String url) {
         Disposable disposable = disposableMap.get(url);
+        if (disposableMap.containsKey(url)) downBeanMap.get(url).setDownStatus(DownStatus.ON_STOP);
         if (disposable != null) {
             disposable.dispose();
             disposableMap.remove(disposable);
